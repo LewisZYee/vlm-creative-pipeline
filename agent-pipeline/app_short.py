@@ -144,6 +144,7 @@ _DEFAULTS = {
         "calls": 0,
         "video_tokens": 0,
         "images_generated": 0,
+        "videos_generated": 0,
     },
 }
 for k, v in _DEFAULTS.items():
@@ -195,8 +196,20 @@ with st.sidebar:
 
     st.divider()
     u = st.session_state.api_usage
+    col1, col2 = st.columns(2)
+    col1.metric(
+        "Images",
+        u["images_generated"],
+        help=f"Each image ~${config.COST_PER_IMAGE}/call. Image API returns no tokens — image cost is tracked separately and not included in the token count.",
+    )
+    col2.metric("Videos", u["videos_generated"])
     if u["calls"] > 0:
-        st.metric("Tokens Used", f"{u['total_tokens']:,}")
+        total_all_tokens = u["total_tokens"] + u["video_tokens"]
+        st.metric(
+            "Tokens Used",
+            f"{total_all_tokens:,}",
+            help="Seed 2.0 Pro (text + video analysis) + Seedance 2.0 (video generation). Image generation is not token-billed and is excluded.",
+        )
         cost = _cost()
         if cost > 0:
             st.metric("Est. Cost (USD)", f"${cost:.4f}")
@@ -547,7 +560,6 @@ if st.session_state.current_step >= 4:
             )
 
             # Reference images
-            st.markdown("---")
             st.markdown("**Reference Images — Seedream 5.0 Lite**")
 
             tab_char, tab_product = st.tabs(["👤 Character", "📦 Add Product Info"])
@@ -658,6 +670,7 @@ if st.session_state.current_step >= 4:
                     res = generate_shot_video(prompt, char_img, product_img)
                 st.session_state.gen_videos["main"] = res
                 _add_usage({}, video_tokens=res.get("video_tokens", 0))
+                st.session_state.api_usage["videos_generated"] += 1
                 st.rerun()
 
             if is_done and vid_result.get("video_url"):
