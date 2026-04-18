@@ -1,0 +1,17 @@
+# Credentials
+.env
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated output
+output/
+
+# Backup and sample data
+backup/
+video/
