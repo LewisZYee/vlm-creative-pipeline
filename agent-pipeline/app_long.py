@@ -203,16 +203,14 @@ with st.sidebar:
         help=f"Each image ~${config.COST_PER_IMAGE}/call. Image API returns no tokens — image cost is tracked separately and not included in the token count.",
     )
     col2.metric("Videos", u["videos_generated"])
-    if u["calls"] > 0:
-        total_all_tokens = u["total_tokens"] + u["video_tokens"]
-        st.metric(
-            "Tokens Used",
-            f"{total_all_tokens:,}",
-            help="Seed 2.0 Pro (text + video analysis) + Seedance 2.0 (video generation). Image generation is not token-billed and is excluded.",
-        )
-        cost = _cost()
-        if cost > 0:
-            st.metric("Est. Cost (USD)", f"${cost:.4f}")
+    total_all_tokens = u["total_tokens"] + u["video_tokens"]
+    st.metric(
+        "Tokens Used",
+        f"{total_all_tokens:,}",
+        help="Seed 2.0 Pro (text + video analysis) + Seedance 2.0 (video generation). Image generation is not token-billed and is excluded.",
+    )
+    cost = _cost()
+    st.metric("Est. Cost (USD)", f"${cost:.4f}")
 
     st.divider()
     if st.button("↺ Start Over", use_container_width=True):
