@@ -71,7 +71,10 @@ RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REFERENCE PROMPTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-character: Standalone casting brief for Seedream (75–100 words). Front-facing portrait for video generation reference. Cover: gender, approximate age, ethnicity, skin tone, hair style and colour, build. One sentence on clothing. One sentence on vibe/energy. Do NOT describe every accessory.
+character: Tight casting brief. Front-facing portrait, for video generation reference.
+  Cover the essentials only: gender, approximate age, ethnicity, skin tone, hair style, build.
+  One sentence on clothing (key garment, colour, fit). One sentence on overall vibe/energy.
+  Do NOT list every accessory or fabric detail.
 
 location: Standalone environment brief for Seedream (75–100 words). Cover: interior/exterior, room type, dominant wall/floor surfaces, key furniture/props (max 3), primary light source, time of day, colour mood.
 
@@ -139,7 +142,8 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict
 
     if character_description:
         user_content += (
-            "### Character Visual Description (extracted from original video — use for appearance details)\n\n"
+            "### Character Visual Description (extracted from original video)\n"
+            "(Prioritise this for appearance details — it reflects the actual actor.)\n\n"
             + character_description
             + "\n\n"
         )
