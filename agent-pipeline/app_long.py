@@ -646,7 +646,7 @@ if st.session_state.current_step >= 4:
                 st.info("Generate reference images above before generating shots.")
 
             shots = shot_result.get("shots", [])
-            for shot in shots:
+            for i, shot in enumerate(shots):
                 sid        = shot["shot_id"]
                 label      = shot.get("label", f"Shot {sid}")
                 time_range = shot.get("time_range", "")
@@ -670,6 +670,10 @@ if st.session_state.current_step >= 4:
                 is_done    = vid_result.get("status") == "succeeded"
 
                 btn_label = f"{'Regen' if is_done else 'Generate'} Shot {sid} with Reference →"
+                prev_vid = st.session_state.gen_videos.get(f"shot_{shots[i-1]['shot_id']}", {}).get("video_url") if i > 0 else None
+                if prev_vid:
+                    st.caption(f"↩ Using Shot {shots[i-1]['shot_id']} as continuity reference")
+
                 if st.button(
                     btn_label,
                     key=f"vid_btn_{sid}",
@@ -677,7 +681,7 @@ if st.session_state.current_step >= 4:
                     disabled=not prompt,
                 ):
                     with st.spinner(f"Generating Shot {sid} — {label}… (1–2 min)"):
-                        res = generate_shot_video(prompt, char_img, product_img, duration=10)
+                        res = generate_shot_video(prompt, char_img, product_img, prev_video_url=prev_vid, duration=10)
                     st.session_state.gen_videos[_vr] = res
                     _add_usage({}, video_tokens=res.get("video_tokens", 0))
                     st.session_state.api_usage["videos_generated"] += 1

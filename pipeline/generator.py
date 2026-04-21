@@ -315,6 +315,7 @@ def generate_shot_video(
     prompt: str,
     char_image_url: Optional[str] = None,
     product_image_url: Optional[str] = None,
+    prev_video_url: Optional[str] = None,
     poll_interval: int = 5,
     duration: Optional[int] = None,
 ) -> dict:
@@ -350,17 +351,12 @@ def generate_shot_video(
     # product_image_url — HTTPS URL or base64 data URI from user's uploaded product photo.
     # role="reference_image" is required by the API for all image content items.
     if char_image_url:
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": char_image_url},
-            "role": "reference_image",
-        })
+        content.append({"type": "image_url", "image_url": {"url": char_image_url}, "role": "reference_image"})
     if product_image_url:
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": product_image_url},
-            "role": "reference_image",
-        })
+        content.append({"type": "image_url", "image_url": {"url": product_image_url}, "role": "reference_image"})
+    if prev_video_url:
+        prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow."
+        content.append({"type": "video_url", "video_url": {"url": prev_video_url}, "role": "reference_video"})
 
     task = client.content_generation.tasks.create(
         model=config.SEEDANCE_V2_MODEL,
