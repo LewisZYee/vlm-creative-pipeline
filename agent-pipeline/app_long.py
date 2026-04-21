@@ -496,6 +496,11 @@ if st.session_state.current_step >= 3:
                 with st.expander("Character Description"):
                     st.markdown(st.session_state.character_description)
 
+            simplified = sections.get("simplified", "")
+            if simplified:
+                st.markdown('<div class="section-label">Simplified Storyboard</div>', unsafe_allow_html=True)
+                st.markdown(simplified)
+
             s2_tok = sr["usage"]["total_tokens"]
             st.markdown(
                 f'<div class="token-note">Step 2 total tokens: {s2_tok:,}</div>',

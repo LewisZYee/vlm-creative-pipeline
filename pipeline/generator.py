@@ -358,18 +358,28 @@ def generate_shot_video(
         prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow. Music must continue seamlessly from the previous shot: same track, same energy level, no restart."
         content.append({"type": "video_url", "video_url": {"url": prev_video_url}, "role": "reference_video"})
 
-    task = client.content_generation.tasks.create(
-        model=config.SEEDANCE_V2_MODEL,
-        content=content,
-        ratio=config.VIDEO_RATIO,
-        duration=duration if duration is not None else config.VIDEO_DURATION,
-        generate_audio=config.VIDEO_GENERATE_AUDIO,
-        watermark=config.VIDEO_WATERMARK,
-    )
+    try:
+        task = client.content_generation.tasks.create(
+            model=config.SEEDANCE_V2_MODEL,
+            content=content,
+            ratio=config.VIDEO_RATIO,
+            duration=duration if duration is not None else config.VIDEO_DURATION,
+            generate_audio=config.VIDEO_GENERATE_AUDIO,
+            watermark=config.VIDEO_WATERMARK,
+        )
+    except Exception as e:
+        return {"video_url": None, "task_id": None, "status": "failed",
+                "error": str(e), "usage_raw": {}, "video_tokens": 0}
+
     task_id = task.id
 
     while True:
-        result = client.content_generation.tasks.get(task_id=task_id)
+        try:
+            result = client.content_generation.tasks.get(task_id=task_id)
+        except Exception as e:
+            return {"video_url": None, "task_id": task_id, "status": "failed",
+                    "error": str(e), "usage_raw": {}, "video_tokens": 0}
+
         if result.status == "succeeded":
             video_url = result.content.video_url
 

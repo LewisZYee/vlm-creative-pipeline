@@ -42,6 +42,7 @@ These apply to ALL rewritten dialogue, voiceover, and on-screen text. Violating 
 4. Where you make a change, add a **[CHANGED: reason]** note in the Optimization Notes column.
 5. Where the original is kept unchanged, write **[KEPT]** in that column.
 6. When rewriting dialogue or voiceover: apply the Brand Tone of Voice Guidelines above. Explicitly note the tone register you are targeting (e.g. "punchy/confident", "curious/inviting", "social-native UGC feel").
+7. Fill the **Music** column for every row. Pick ONE specific background track that runs the full video. Specify genre and BPM (e.g. "upbeat lo-fi hip-hop, 100 BPM"). Note how it behaves: enters at mid-energy at 0s, ducks under dialogue, swells on silent visual beats, lifts at the CTA. Never write "upbeat music" — be specific.
 
 ---
 
@@ -104,7 +105,25 @@ Briefly note the key elements kept from the original.
 ## Tone & Dialogue Changes
 For every rewritten line of dialogue or voiceover, explain the tone shift: what was wrong with the original tone and what register the new version targets.
 
-# 4. Simplified Storyboard 
+# 4. Final Generation Output
+
+## 4.1 Simplified Storyboard
+| Second | Scene Description | Dialogue | Tone Note | Music | Notes |
+|--------|-------------------|----------|-----------|-------|-------|
+(one row per second, from 1s through the full video duration)
+
+## 4.2 Character Prompt
+Write a standalone casting brief (75–100 words) for Seedream image generation. Front-facing portrait format.
+Cover: gender, approximate age, ethnicity, skin tone, hair style and colour, build. One sentence on clothing (key garment, colour, fit). One sentence on overall vibe/energy. Extract these details from the original storyboard's character descriptions. Do NOT invent appearance.
+
+## 4.3 Scene Prompt
+Write a standalone environment brief (75–100 words) for Seedream/Seedance. Cover: interior or exterior, specific location type (e.g. "outdoor basketball court", "modern kitchen", "urban street"), dominant surfaces and materials, key props (max 3), primary light source, time of day, colour mood. Base this on the actual scenes described in the original storyboard. Do NOT invent a generic studio setting if the original shows a real location.
+
+## 4.4 Style and Camera Prompt
+Write a standalone style and camera brief (50–75 words). Cover: overall visual style (UGC, cinematic, studio, etc.), primary shot types used (close-up, medium, wide), camera movement (handheld, static, slow-zoom), colour grade/mood, and any distinctive visual techniques from the original.
+
+## 4.5 Regeneration Reference
+One paragraph (50–75 words) summarising the key visual and narrative elements that must be preserved in any AI-generated version: character identity, location, core message, and CTA.
 
 ---
 
