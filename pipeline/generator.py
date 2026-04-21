@@ -355,7 +355,7 @@ def generate_shot_video(
     for url in (product_image_urls or []):
         content.append({"type": "image_url", "image_url": {"url": url}, "role": "reference_image"})
     if prev_video_url:
-        prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow."
+        prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow. Music must continue seamlessly from the previous shot: same track, same energy level, no restart."
         content.append({"type": "video_url", "video_url": {"url": prev_video_url}, "role": "reference_video"})
 
     task = client.content_generation.tasks.create(
