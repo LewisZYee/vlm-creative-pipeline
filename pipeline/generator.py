@@ -314,7 +314,7 @@ def generate_image(prompt: str) -> dict:
 def generate_shot_video(
     prompt: str,
     char_image_url: Optional[str] = None,
-    product_image_url: Optional[str] = None,
+    product_image_urls: Optional[list] = None,
     prev_video_url: Optional[str] = None,
     poll_interval: int = 5,
     duration: Optional[int] = None,
@@ -352,8 +352,8 @@ def generate_shot_video(
     # role="reference_image" is required by the API for all image content items.
     if char_image_url:
         content.append({"type": "image_url", "image_url": {"url": char_image_url}, "role": "reference_image"})
-    if product_image_url:
-        content.append({"type": "image_url", "image_url": {"url": product_image_url}, "role": "reference_image"})
+    for url in (product_image_urls or []):
+        content.append({"type": "image_url", "image_url": {"url": url}, "role": "reference_image"})
     if prev_video_url:
         prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow."
         content.append({"type": "video_url", "video_url": {"url": prev_video_url}, "role": "reference_video"})

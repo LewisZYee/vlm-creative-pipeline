@@ -593,54 +593,40 @@ if st.session_state.current_step >= 4:
 
             # ── Product Info tab ──────────────────────────────────────────────
             with tab_product:
-                st.markdown(
-                    "Upload your product photo. "
-                    "Seedance will replicate the product's exact appearance in the video."
-                )
-                product_upload = st.file_uploader(
-                    "Upload product photo",
+                st.markdown("Upload 1–3 product photos (different angles). Seedance will replicate the exact appearance.")
+                import base64 as _b64
+                uploads = st.file_uploader(
+                    "Upload product photos",
                     type=["jpg", "jpeg", "png", "webp"],
+                    accept_multiple_files=True,
                     key="product_image_upload",
                     label_visibility="collapsed",
                 )
-                if product_upload:
-                    import base64 as _b64
-                    raw_bytes = product_upload.read()
-                    ext = Path(product_upload.name).suffix.lower().lstrip(".")
-                    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                            "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
-                    data_uri = f"data:{mime};base64,{_b64.b64encode(raw_bytes).decode()}"
-                    st.session_state["product_image_bytes"] = raw_bytes
-                    st.session_state["product_image_name"]  = product_upload.name
-                    st.session_state.gen_images["product"] = {
-                        "status":    "succeeded",
-                        "image_url": data_uri,
-                        "error":     None,
-                    }
-
-                prod_gen  = st.session_state.gen_images.get("product", {})
-                prod_done = prod_gen.get("status") == "succeeded"
-
-                if st.session_state.get("product_image_bytes"):
-                    st.image(
-                        st.session_state["product_image_bytes"],
-                        caption=f"✅ {st.session_state.get('product_image_name', 'Product')} — will be passed to Seedance as reference image",
-                        use_container_width=False,
-                        width=240,
-                    )
+                if uploads:
+                    uploads = uploads[:3]
+                    uris = []
+                    for f in uploads:
+                        ext  = Path(f.name).suffix.lower().lstrip(".")
+                        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                        uris.append(f"data:{mime};base64,{_b64.b64encode(f.read()).decode()}")
+                    st.session_state.gen_images["product"] = {"status": "succeeded", "image_urls": uris}
+                    cols = st.columns(len(uploads))
+                    for col, f, uri in zip(cols, uploads, uris):
+                        col.image(uri, caption=f.name, width=160)
 
             # ── Per-shot video generation ─────────────────────────────────────
             st.markdown("---")
             st.markdown("**Video Generation — Seedance 2.0**")
 
-            char_img    = st.session_state.gen_images.get("character", {}).get("image_url")
-            product_img = st.session_state.gen_images.get("product",   {}).get("image_url")
-            has_ref     = bool(char_img or product_img)
+            char_img     = st.session_state.gen_images.get("character", {}).get("image_url")
+            product_imgs = st.session_state.gen_images.get("product",   {}).get("image_urls", [])
+            has_ref      = bool(char_img or product_imgs)
 
             if has_ref:
-                ready_labels = " + ".join(
-                    lbl for lbl, url in [("character", char_img), ("product", product_img)] if url
-                )
+                ready_labels = " + ".join(filter(None, [
+                    "character" if char_img else "",
+                    f"{len(product_imgs)} product photo{'s' if len(product_imgs) > 1 else ''}" if product_imgs else "",
+                ]))
                 st.success(f"Reference images ready: {ready_labels}")
             else:
                 st.info("Generate reference images above before generating shots.")
@@ -681,7 +667,7 @@ if st.session_state.current_step >= 4:
                     disabled=not prompt,
                 ):
                     with st.spinner(f"Generating Shot {sid} — {label}… (1–2 min)"):
-                        res = generate_shot_video(prompt, char_img, product_img, prev_video_url=prev_vid, duration=10)
+                        res = generate_shot_video(prompt, char_img, product_imgs, prev_video_url=prev_vid, duration=10)
                     st.session_state.gen_videos[_vr] = res
                     _add_usage({}, video_tokens=res.get("video_tokens", 0))
                     st.session_state.api_usage["videos_generated"] += 1
