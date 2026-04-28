@@ -83,7 +83,7 @@ def _parse_character_description(content: str) -> tuple:
     return analysis, char_desc
 
 
-def analyze_video(video_path: str, performance: str = "bad") -> dict:
+def analyze_video(video_path: str, performance: str = "bad", api_key: str = "") -> dict:
     """
     Analyze a video file with Seed 2.0 Pro VLM.
 
@@ -104,7 +104,7 @@ def analyze_video(video_path: str, performance: str = "bad") -> dict:
     """
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
     prompt = _read_prompt(performance)
     video_b64 = _encode_video(video_path)
 

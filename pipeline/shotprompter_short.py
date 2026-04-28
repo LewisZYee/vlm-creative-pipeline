@@ -118,7 +118,7 @@ OUTPUT FORMAT — JSON only, no markdown fences, no explanation
 """
 
 
-def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict:
+def generate_shot_prompts_short(storyboard_content: str, sections: dict, api_key: str = "") -> dict:
     """
     Generate a single Seedance video prompt for the full 15-second video,
     plus standalone character and location reference prompts.
@@ -137,7 +137,7 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict
     """
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
 
     character_description = sections.get("character_description", "")
     character             = sections.get("character", "")

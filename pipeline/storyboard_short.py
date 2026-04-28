@@ -140,7 +140,7 @@ def parse_sections(storyboard_text: str) -> dict:
     }
 
 
-def generate_storyboard_short(analysis_text: str) -> dict:
+def generate_storyboard_short(analysis_text: str, api_key: str = "") -> dict:
     """
     Generate a revised 15-second storyboard from the Step 1 analysis output.
 
@@ -156,7 +156,7 @@ def generate_storyboard_short(analysis_text: str) -> dict:
     """
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
 
     combined = (
         STORYBOARD_SHORT_PROMPT

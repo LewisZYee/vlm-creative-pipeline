@@ -20,6 +20,7 @@ from pipeline.critic import generate_critique
 from pipeline.storyboard_short import generate_storyboard_short
 from pipeline.shotprompter_short import generate_shot_prompts_short
 from pipeline.generator import generate_image, generate_shot_video
+from pipeline.qa_monitor import qa_generated_video
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -134,6 +135,7 @@ _DEFAULTS = {
     "character_description": "",
     "gen_images": {},
     "gen_videos": {},
+    "qa_result": None,
     "_stage_path": None,    # file staged for analysis (before clicking Analyze)
     "_stage_name": None,
     "_stage_perf": "bad",
@@ -150,6 +152,32 @@ _DEFAULTS = {
 for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ── API Key Gate ───────────────────────────────────────────────────────────────
+if "ark_api_key" not in st.session_state:
+    st.session_state.ark_api_key = ""
+
+if not st.session_state.ark_api_key:
+    st.markdown("## Enter your BytePlus API Key")
+    st.markdown(
+        "Your key is used only for this browser session and is never stored or logged. "
+        "Each participant uses their own key and pays their own usage costs."
+    )
+    with st.form("api_key_form"):
+        key_input = st.text_input(
+            "API Key",
+            type="password",
+            placeholder="Paste your BytePlus Ark API key here…",
+        )
+        if st.form_submit_button("Start →", type="primary"):
+            if key_input.strip():
+                st.session_state.ark_api_key = key_input.strip()
+                st.rerun()
+            else:
+                st.error("Please enter a valid API key.")
+    st.stop()
+
+_API_KEY = st.session_state.ark_api_key
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -305,13 +333,14 @@ if st.session_state.current_step >= 1:
                 a_result = analyze_video(
                     st.session_state.video_path,
                     performance=st.session_state.performance,
+                    api_key=_API_KEY,
                 )
                 _add_usage(a_result["usage"])
                 st.session_state.analysis_result = a_result
                 st.session_state.character_description = a_result.get("character_description", "")
 
                 st.write("🔍 Extracting compliance issues and scores…")
-                cr = generate_critique(a_result["content"])
+                cr = generate_critique(a_result["content"], api_key=_API_KEY)
                 _add_usage(cr["usage"])
                 st.session_state.critique_result = cr
 
@@ -463,7 +492,7 @@ if st.session_state.current_step >= 3:
         with st.chat_message("assistant", avatar="🎬"):
             with st.status("Generating improved storyboard…", expanded=True) as status:
                 st.write("✍️ Restructuring 15-second Hook → Demo → CTA flow…")
-                sb_result = generate_storyboard_short(st.session_state.analysis_result["content"])
+                sb_result = generate_storyboard_short(st.session_state.analysis_result["content"], api_key=_API_KEY)
                 _add_usage(sb_result["usage"])
                 st.session_state.storyboard_result = sb_result
                 status.update(label="Storyboard ready ✓", state="complete")
@@ -540,7 +569,7 @@ if st.session_state.current_step >= 4:
                 st.write("🎯 Translating storyboard into Seedance-ready prompt…")
                 sr   = st.session_state.storyboard_result
                 secs = {**sr["sections"], "character_description": st.session_state.character_description}
-                sh_result = generate_shot_prompts_short(sr["content"], secs)
+                sh_result = generate_shot_prompts_short(sr["content"], secs, api_key=_API_KEY)
                 _add_usage(sh_result["usage"])
                 st.session_state.shot_result = sh_result
                 status.update(label="Prompts ready ✓", state="complete")
@@ -585,7 +614,7 @@ if st.session_state.current_step >= 4:
                     disabled=not char_prompt,
                 ):
                     with st.spinner("Generating character image with Seedream 5.0 Lite…"):
-                        res = generate_image(char_prompt)
+                        res = generate_image(char_prompt, api_key=_API_KEY)
                     st.session_state.gen_images["character"] = res
                     if res.get("status") == "succeeded":
                         st.session_state.api_usage["images_generated"] += 1
@@ -656,7 +685,7 @@ if st.session_state.current_step >= 4:
                 disabled=not (prompt and has_ref),
             ):
                 with st.spinner("Generating 15-second video… (1–2 min)"):
-                    res = generate_shot_video(prompt, char_img, product_imgs)
+                    res = generate_shot_video(prompt, char_img, product_imgs, api_key=_API_KEY)
                 st.session_state.gen_videos["main"] = res
                 _add_usage({}, video_tokens=res.get("video_tokens", 0))
                 st.session_state.api_usage["videos_generated"] += 1
@@ -666,5 +695,85 @@ if st.session_state.current_step >= 4:
                 st.success("Video generated!")
                 st.video(vid_result["video_url"])
                 st.caption(f"Seedance 2.0 · {vid_result.get('video_tokens', 0):,} video tokens")
+
+                # ── ADD ON: QA & Monitoring ───────────────────────────────────
+                st.markdown("---")
+                st.markdown("**ADD ON — QA & Monitoring**")
+                st.markdown(
+                    "Feed the generated video back to Seed 2.0 Pro to check "
+                    "instruction following and compliance."
+                )
+
+                qa_done = st.session_state.qa_result is not None
+                if st.button(
+                    f"{'Re-run' if qa_done else 'Run'} QA Check →",
+                    key="run_qa",
+                    type="secondary" if qa_done else "primary",
+                ):
+                    with st.spinner("Running QA analysis… (30–60 sec)"):
+                        qa_res = qa_generated_video(
+                            vid_result["video_url"],
+                            st.session_state.get(_vid_key, ""),
+                            api_key=_API_KEY,
+                        )
+                    _add_usage(qa_res["usage"])
+                    st.session_state.qa_result = qa_res
+                    st.rerun()
+
+                if st.session_state.qa_result:
+                    qa  = st.session_state.qa_result["qa"]
+                    _if = qa.get("instruction_following_score", 0)
+                    _co = qa.get("compliance_score", 0)
+                    _ok = qa.get("overall_pass", False)
+
+                    pass_badge = (
+                        '<span class="badge badge-pass">✅ PASS</span>'
+                        if _ok else
+                        '<span class="badge badge-fail">🚫 FAIL</span>'
+                    )
+                    st.markdown(pass_badge, unsafe_allow_html=True)
+
+                    c1, c2 = st.columns(2)
+                    c1.metric("Instruction Following", f"{_if}/10")
+                    c2.metric("Compliance", f"{_co}/10")
+
+                    summary = qa.get("summary", "")
+                    if summary:
+                        st.caption(summary)
+
+                    inst_issues = qa.get("instruction_issues", [])
+                    if inst_issues:
+                        st.markdown('<div class="section-label">Instruction Deviations</div>', unsafe_allow_html=True)
+                        for issue in inst_issues:
+                            st.markdown(
+                                f'<div class="issue-card issue-med">'
+                                f'<div class="issue-meta">{issue.get("element", "")}</div>'
+                                f'<div class="issue-orig">Expected: {issue.get("expected", "")}</div>'
+                                f'<div class="issue-fix">Actual: {issue.get("actual", "")}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                    comp_issues = qa.get("compliance_issues", [])
+                    if comp_issues:
+                        st.markdown('<div class="section-label">Compliance Issues</div>', unsafe_allow_html=True)
+                        for issue in comp_issues:
+                            sev = issue.get("severity", "LOW")
+                            st.markdown(
+                                f'<div class="issue-card {_SEV_CLASS.get(sev, "issue-low")}">'
+                                f'<div class="issue-meta">'
+                                f'{_SEV_ICON.get(sev, "⚪")} {issue.get("description", "")}'
+                                f'<span class="issue-ts">· {issue.get("timestamp", "")}</span>'
+                                f'</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                    qa_tok = st.session_state.qa_result["usage"]["total_tokens"]
+                    st.markdown(
+                        f'<div class="token-note">QA tokens: {qa_tok:,}</div>',
+                        unsafe_allow_html=True,
+                    )
+
             elif vid_result.get("status") == "failed":
                 st.error(f"Generation failed: {vid_result.get('error', 'unknown')}")

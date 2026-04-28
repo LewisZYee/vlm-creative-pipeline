@@ -266,7 +266,7 @@ def all_done(scenes: list[dict]) -> bool:
 
 # ── Step 5 — Seedream image generation ────────────────────────────────────────
 
-def generate_image(prompt: str) -> dict:
+def generate_image(prompt: str, api_key: str = "") -> dict:
     """
     Generate an image with Seedream 5.0 Lite via the synchronous images.generate API.
 
@@ -282,7 +282,7 @@ def generate_image(prompt: str) -> dict:
     """
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
 
     try:
         response = client.images.generate(
@@ -318,6 +318,7 @@ def generate_shot_video(
     prev_video_url: Optional[str] = None,
     poll_interval: int = 5,
     duration: Optional[int] = None,
+    api_key: str = "",
 ) -> dict:
     """
     Submit a Seedance 2.0 video generation task with optional reference images
@@ -341,7 +342,7 @@ def generate_shot_video(
     import time
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
 
     content = [{"type": "text", "text": prompt}]
 

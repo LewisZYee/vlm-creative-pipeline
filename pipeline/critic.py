@@ -116,7 +116,7 @@ def _parse_json(text: str) -> dict:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def generate_critique(analysis_text: str) -> dict:
+def generate_critique(analysis_text: str, api_key: str = "") -> dict:
     """
     Generate a structured critique from the Step 1 analysis output.
 
@@ -138,7 +138,7 @@ def generate_critique(analysis_text: str) -> dict:
     # ── LLM call for issues + recommendations only ────────────────────────────
     from byteplussdkarkruntime import Ark
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
     response = client.chat.completions.create(
         model=config.ANALYSIS_MODEL,
         messages=[
