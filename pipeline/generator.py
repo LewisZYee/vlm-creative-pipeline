@@ -160,7 +160,7 @@ def submit_video_tasks(
 
     client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
 
-    is_v2 = "seedance-2" in config.VIDEO_MODEL or "dreamina" in config.VIDEO_MODEL
+    is_v2 = True  # always Seedance 2.0
 
     # Encode reference video once, reuse for every scene task
     ref_video_b64 = None
@@ -210,20 +210,12 @@ def submit_video_tasks(
         try:
             if is_v2:
                 task = client.content_generation.tasks.create(
-                    model=config.VIDEO_MODEL,
+                    model=config.SEEDANCE_V2_MODEL,
                     content=content,
                     ratio=config.VIDEO_RATIO,
                     duration=config.VIDEO_DURATION,
                     generate_audio=config.VIDEO_GENERATE_AUDIO,
                     watermark=config.VIDEO_WATERMARK,
-                )
-            else:
-                task = client.content_generation.tasks.create(
-                    model=config.VIDEO_MODEL,
-                    content=content,
-                    resolution=config.VIDEO_RESOLUTION,
-                    duration=config.VIDEO_DURATION,
-                    generate_audio=config.VIDEO_GENERATE_AUDIO,
                 )
             scene["task_id"] = task.id
             scene["status"]  = "submitted"
