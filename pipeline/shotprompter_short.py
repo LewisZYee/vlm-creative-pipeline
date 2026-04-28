@@ -2,20 +2,19 @@
 Shot Prompter (Short) — Single-prompt version for 15-second videos
 Takes the revised 15-second storyboard and produces:
   - ONE single Seedance video prompt covering the full 15 seconds end-to-end
-  - Standalone character reference prompt (Seedream)
   - Standalone location reference prompt (Seedream)
+  - Standalone character reference prompt (Seedream) — only when a character exists
 """
 import json
 import re
 
 import config
 
-
-DIRECTOR_SYSTEM_PROMPT_SHORT = """You are a professional film director and AI video prompt engineer specialising in Seedance / Seedream generation for short-form social ads.
+_PROMPT_HEADER = """You are a professional film director and AI video prompt engineer specialising in Seedance / Seedream generation for short-form social ads.
 
 You will receive the full revised 15-second storyboard, including the second-by-second breakdown with visual content, characters, emotion, action, shot type, on-screen text, dialogue, music, and optimization notes.
 
-Your task: produce ONE single Seedance video prompt that covers the entire 15-second video from first frame to last frame — plus two standalone reference image prompts (character and location).
+Your task: produce ONE single Seedance video prompt that covers the entire 15-second video from first frame to last frame — plus standalone reference image prompt(s).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PACING — READ THIS FIRST, IT OVERRIDES EVERYTHING ELSE
@@ -64,14 +63,15 @@ Write the music brief as a continuous description woven into the video prompt, n
 THE SINGLE VIDEO PROMPT — CRITICAL RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This is a SINGLE flowing paragraph of 400–550 words that describes the entire 15-second video as one continuous experience. It is the ONLY thing the Seedance operator will read.
+"""
 
+_PROMPT_WITH_CHARACTER = """
 The prompt must:
 - Open with: "Use the provided character reference image for the character's exact appearance, clothing, and style throughout the entire video. Use the provided product reference image for the product featured in this video — replicate its exact shape, colour, packaging, and branding in every shot where it appears."
-- Cover the full 15 seconds without leaving any gap — viewer should be able to follow the complete story from this prompt alone
-- Include EVERY piece of on-screen text, caption, title card, and lower-third in the exact wording from the storyboard and the approximate second they appear (e.g. "at 3 seconds, the text overlay reads…")
-- Include ALL dialogue lines quoted exactly with approximate timing AND a beat of silence after each (e.g. "at 4 seconds the character says '…', then pauses, holding the camera's gaze for one beat")
-- Describe the complete emotional arc: how the character's energy and expression evolve from the hook through the demo to the CTA
-- NO sudden stops or unresolved narrative threads — the story must feel complete and satisfying at second 15
+- Cover the full 15 seconds without leaving any gap
+- Include EVERY piece of on-screen text with approximate second of appearance
+- Include ALL dialogue lines quoted exactly with approximate timing AND a beat of silence after each
+- Describe the complete emotional arc from hook through demo to CTA
 - The CTA must be explicit: what text appears, what the character says or does, and a 2-second hold on the final frame
 
 MANDATORY ELEMENTS — all woven into the single paragraph:
@@ -87,13 +87,13 @@ MANDATORY ELEMENTS — all woven into the single paragraph:
 7. ENVIRONMENT — describe the set once clearly; note any scene changes if they occur
 8. CAMERA PROGRESSION — how the camera moves or changes across the 15 seconds
 9. LIGHTING — key light quality and any changes
-10. AUDIO & MUSIC — specific genre, BPM range, how music enters at 0s, ducks under dialogue, builds through the demo, lifts at the CTA, and exits; any SFX
-11. CLOSING FRAME — the exact final image, what text is visible, character's final state, a 2-second hold, then how the video ends (fade / hard cut / freeze)
+10. AUDIO & MUSIC — specific genre, BPM range, how music enters, ducks under dialogue, builds to CTA, and exits; any SFX
+11. CLOSING FRAME — the exact final image, what text is visible, character's final state, a 2-second hold, then how the video ends
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REFERENCE PROMPTS — 2 STANDALONE PARAGRAPHS
+REFERENCE PROMPTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Each is a standalone paragraph of 75–100 words maximum. Keep them concise. Do NOT reference shot numbers or "as above".
+Each is a standalone paragraph of 75–100 words maximum.
 
 character:
   Tight casting brief. Front-facing portrait, for video generation reference.
@@ -117,23 +117,68 @@ OUTPUT FORMAT — JSON only, no markdown fences, no explanation
 }
 """
 
+_PROMPT_NO_CHARACTER = """
+The prompt must:
+- Open with: "Use the provided product reference image for the product featured in this video — replicate its exact shape, colour, packaging, and branding in every shot where it appears."
+- Cover the full 15 seconds without leaving any gap
+- Include EVERY piece of on-screen text with approximate second of appearance
+- Include ALL voiceover/narration lines quoted exactly with approximate timing
+- The CTA must be explicit: what text appears and a 2-second hold on the final frame
 
-def generate_shot_prompts_short(storyboard_content: str, sections: dict, api_key: str = "") -> dict:
+MANDATORY ELEMENTS — all woven into the single paragraph:
+
+0. REFERENCE IMAGE DECLARATION — open the prompt with this sentence verbatim:
+   "Use the provided product reference image for the product featured in this video — replicate its exact shape, colour, packaging, and branding in every shot where it appears."
+1. OPENING FRAME — the very first image the viewer sees, including environment and composition
+2. PRODUCT — refer to the product by its category name. In every scene where the product is shown, write: "the product matches the provided product reference image exactly". Do NOT invent a product description.
+3. FULL VISUAL SEQUENCE — compositions, movements, and transitions across all 15 seconds in temporal order
+4. ALL VOICEOVER/NARRATION — every spoken line quoted exactly, with approximate second of delivery
+5. ALL ON-SCREEN TEXT — every text overlay, graphic, or caption, with exact wording and approximate second of appearance
+6. ENVIRONMENT — describe the setting clearly; note any scene changes
+7. CAMERA PROGRESSION — how the camera moves or changes across the 15 seconds
+8. LIGHTING — key light quality and any changes
+9. AUDIO & MUSIC — specific genre, BPM range, how music enters, builds, and exits; any SFX
+10. CLOSING FRAME — the exact final image, what text is visible, a 2-second hold, then how the video ends
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFERENCE PROMPTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+location:
+  Tight environment brief (75–100 words). Cover: interior or exterior, room/location type, dominant surfaces, key props (max 3), primary light source, time of day, colour mood.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT — JSON only, no markdown fences, no explanation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "video_prompt": "<single flowing paragraph 400–550 words covering the entire 15-second video>",
+  "reference_prompts": {
+    "location": "<standalone paragraph 75–100 words>"
+  }
+}
+"""
+
+
+def _build_system_prompt(has_character: bool) -> str:
+    return _PROMPT_HEADER + (_PROMPT_WITH_CHARACTER if has_character else _PROMPT_NO_CHARACTER)
+
+
+def generate_shot_prompts_short(
+    storyboard_content: str,
+    sections: dict,
+    api_key: str = "",
+    has_character: bool = True,
+) -> dict:
     """
     Generate a single Seedance video prompt for the full 15-second video,
-    plus standalone character and location reference prompts.
+    plus standalone reference prompts.
 
     Args:
         storyboard_content: Full 15-second storyboard markdown from storyboard_short.
         sections:           Parsed sections dict (simplified, character, scene, style).
-
-    Returns:
-        {
-            "video_prompt": str,    # single prompt for the full 15s video
-            "reference":    dict,   # {"character": str, "location": str}
-            "raw":          str,
-            "usage":        dict,
-        }
+        api_key:            BytePlus Ark API key (falls back to config if empty).
+        has_character:      False if the video has no human character — omits character
+                            reference instruction and character brief from output.
     """
     from byteplussdkarkruntime import Ark
 
@@ -154,7 +199,7 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict, api_key
         "(Use these to build rich standalone reference prompts.)\n\n"
     )
 
-    if character_description:
+    if has_character and character_description:
         user_content += (
             "### Character Visual Description (extracted from original video)\n"
             "(Prioritise this for appearance details — it reflects the actual actor.)\n\n"
@@ -162,16 +207,18 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict, api_key
             + "\n\n"
         )
 
+    if has_character and character:
+        user_content += "### Character Reference\n\n" + character + "\n\n"
+
     user_content += (
-        "### Character Reference\n\n"    + character
-        + "\n\n### Scene & Environment Reference\n\n" + scene
-        + "\n\n### Style & Camera Reference\n\n"      + style
+        "### Scene & Environment Reference\n\n" + scene
+        + "\n\n### Style & Camera Reference\n\n" + style
     )
 
     response = client.chat.completions.create(
         model=config.STORYBOARD_MODEL,
         messages=[
-            {"role": "system", "content": DIRECTOR_SYSTEM_PROMPT_SHORT},
+            {"role": "system", "content": _build_system_prompt(has_character)},
             {"role": "user",   "content": user_content},
         ],
         thinking={"type": "enabled"},

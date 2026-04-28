@@ -568,8 +568,9 @@ if st.session_state.current_step >= 4:
             with st.status("Building video prompt…", expanded=True) as status:
                 st.write("🎯 Translating storyboard into Seedance-ready prompt…")
                 sr   = st.session_state.storyboard_result
-                secs = {**sr["sections"], "character_description": st.session_state.character_description}
-                sh_result = generate_shot_prompts_short(sr["content"], secs, api_key=_API_KEY)
+                secs          = {**sr["sections"], "character_description": st.session_state.character_description}
+                has_character = bool(st.session_state.character_description)
+                sh_result = generate_shot_prompts_short(sr["content"], secs, api_key=_API_KEY, has_character=has_character)
                 _add_usage(sh_result["usage"])
                 st.session_state.shot_result = sh_result
                 status.update(label="Prompts ready ✓", state="complete")
@@ -598,32 +599,36 @@ if st.session_state.current_step >= 4:
 
             # ── Character tab ─────────────────────────────────────────────────
             with tab_char:
-                _ref_key = "ref_prompt_character"
-                if _ref_key not in st.session_state:
-                    st.session_state[_ref_key] = reference.get("character", "")
+                _has_char = bool(st.session_state.character_description)
+                if not _has_char and not reference.get("character", ""):
+                    st.info("No character detected in this video — character reference is not needed.")
+                else:
+                    _ref_key = "ref_prompt_character"
+                    if _ref_key not in st.session_state:
+                        st.session_state[_ref_key] = reference.get("character", "")
 
-                st.text_area("Prompt (editable)", height=120, key=_ref_key)
-                char_prompt = st.session_state[_ref_key]
-                char_gen    = st.session_state.gen_images.get("character", {})
-                char_done   = char_gen.get("status") == "succeeded"
+                    st.text_area("Prompt (editable)", height=120, key=_ref_key)
+                    char_prompt = st.session_state[_ref_key]
+                    char_gen    = st.session_state.gen_images.get("character", {})
+                    char_done   = char_gen.get("status") == "succeeded"
 
-                if st.button(
-                    f"{'Regen' if char_done else 'Generate'} Character Image",
-                    key="gen_img_character",
-                    type="secondary" if char_done else "primary",
-                    disabled=not char_prompt,
-                ):
-                    with st.spinner("Generating character image with Seedream 5.0 Lite…"):
-                        res = generate_image(char_prompt, api_key=_API_KEY)
-                    st.session_state.gen_images["character"] = res
-                    if res.get("status") == "succeeded":
-                        st.session_state.api_usage["images_generated"] += 1
-                    st.rerun()
+                    if st.button(
+                        f"{'Regen' if char_done else 'Generate'} Character Image",
+                        key="gen_img_character",
+                        type="secondary" if char_done else "primary",
+                        disabled=not char_prompt,
+                    ):
+                        with st.spinner("Generating character image with Seedream 5.0 Lite…"):
+                            res = generate_image(char_prompt, api_key=_API_KEY)
+                        st.session_state.gen_images["character"] = res
+                        if res.get("status") == "succeeded":
+                            st.session_state.api_usage["images_generated"] += 1
+                        st.rerun()
 
-                if char_done and char_gen.get("image_url"):
-                    st.image(char_gen["image_url"], caption="Character reference · $0.04")
-                elif char_gen.get("status") == "failed":
-                    st.error(f"Failed: {char_gen.get('error', 'unknown')}")
+                    if char_done and char_gen.get("image_url"):
+                        st.image(char_gen["image_url"], caption="Character reference · $0.04")
+                    elif char_gen.get("status") == "failed":
+                        st.error(f"Failed: {char_gen.get('error', 'unknown')}")
 
             # ── Product Info tab ──────────────────────────────────────────────
             with tab_product:
@@ -663,7 +668,7 @@ if st.session_state.current_step >= 4:
                 ]))
                 st.success(f"Reference images ready: {ready_labels}")
             else:
-                st.info("Generate reference images above before generating the video.")
+                st.info("No reference images — video will be generated from prompt only.")
 
             _vid_key = "shot_prompt_main"
             if _vid_key not in st.session_state:
@@ -682,7 +687,7 @@ if st.session_state.current_step >= 4:
                 f"{'Regen' if is_done else 'Generate'} with Reference →",
                 key="vid_ref",
                 type="secondary" if is_done else "primary",
-                disabled=not (prompt and has_ref),
+                disabled=not prompt,
             ):
                 with st.spinner("Generating 15-second video… (1–2 min)"):
                     res = generate_shot_video(prompt, char_img, product_imgs, api_key=_API_KEY)
