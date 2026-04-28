@@ -222,6 +222,15 @@ with st.sidebar:
     st.markdown(f"{'✅' if cs > 3  else ('⏳' if cs == 3 else '○')} **Step 2** — Storyboard")
     st.markdown(f"{'✅' if cs > 4  else ('⏳' if cs == 4 else '○')} **Step 3** — Image & Video")
 
+    _qa = st.session_state.get("qa_result")
+    if _qa:
+        _pass = _qa["qa"].get("overall_pass", False)
+        _icon = "✅" if _pass else "❌"
+        _label = "PASS" if _pass else "FAIL"
+        st.markdown(f"{_icon} **Add On** — QA & Monitoring · **{_label}**")
+    else:
+        st.markdown("○ **Add On** — QA & Monitoring")
+
     st.divider()
     u = st.session_state.api_usage
     col1, col2 = st.columns(2)

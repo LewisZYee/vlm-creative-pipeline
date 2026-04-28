@@ -48,7 +48,6 @@ OUTPUT — JSON only, no markdown fences, no explanation
 {
   "instruction_following_score": <1–10>,
   "compliance_score": <1–10>,
-  "overall_pass": <true|false>,
   "instruction_issues": [
     {
       "element": "<what aspect — e.g. Environment, Dialogue, Character>",
@@ -65,8 +64,6 @@ OUTPUT — JSON only, no markdown fences, no explanation
   ],
   "summary": "<2–3 sentence overall assessment>"
 }
-
-overall_pass = true only if instruction_following_score >= 7 AND compliance_score >= 8 AND no HIGH compliance issues.
 """
 
 
@@ -123,17 +120,25 @@ def qa_generated_video(video_url: str, original_prompt: str, api_key: str = "") 
     clean = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
     clean = re.sub(r"\s*```$", "", clean.strip())
 
+    # Pass/fail thresholds — calculated here, not by the LLM
+    # instruction >= 6  (AI generation has inherent variance, some deviation is expected)
+    # compliance  >= 7  (compliance is more critical)
+    # no HIGH severity compliance issues
     try:
         qa_data = json.loads(clean)
     except Exception:
         qa_data = {
             "instruction_following_score": 0,
             "compliance_score": 0,
-            "overall_pass": False,
             "instruction_issues": [],
             "compliance_issues": [],
             "summary": "Failed to parse QA response.",
         }
+
+    _if    = qa_data.get("instruction_following_score", 0)
+    _co    = qa_data.get("compliance_score", 0)
+    _highs = [i for i in qa_data.get("compliance_issues", []) if i.get("severity") == "HIGH"]
+    qa_data["overall_pass"] = bool(_if >= 6 and _co >= 7 and not _highs)
 
     usage = dump.get("usage", {})
     return {
