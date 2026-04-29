@@ -7,12 +7,12 @@ Uses the same storyboardPrompt as storyboard.py.
 import re
 
 import config
+from pipeline.common import ark_client, message_content, read_text, usage_summary
 
 
 def _read_storyboard_prompt() -> str:
     path = config.PROMPTS_DIR / "storyboardPrompt"
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    return read_text(path)
 
 
 def extract_section(text: str, header: str) -> str:
@@ -40,7 +40,7 @@ def parse_sections(storyboard_text: str) -> dict:
     }
 
 
-def generate_storyboard_short(analysis_text: str) -> dict:
+def generate_storyboard_short(analysis_text: str, api_key: str = "") -> dict:
     """
     Generate a revised storyboard from the Step 1 analysis output.
     Duration matches the original video — not compressed to 15 seconds.
@@ -55,9 +55,7 @@ def generate_storyboard_short(analysis_text: str) -> dict:
             "usage":    dict,
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     storyboard_prompt = _read_storyboard_prompt()
     combined = (
@@ -72,22 +70,12 @@ def generate_storyboard_short(analysis_text: str) -> dict:
         thinking={"type": "enabled"},
     )
 
-    dump    = response.model_dump(exclude_none=True)
-    content = ""
-    for ch in dump.get("choices", []):
-        content += (ch.get("message") or {}).get("content") or ""
-
-    usage    = dump.get("usage", {})
+    content, usage = message_content(response)
     sections = parse_sections(content)
 
     return {
         "content":  content,
         "sections": sections,
-        "usage": {
-            "prompt_tokens":     usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens":  usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":      usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

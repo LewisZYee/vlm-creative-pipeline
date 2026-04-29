@@ -6,6 +6,7 @@ Author: Lewis Zhao, BytePlus EUI Solution Architect
 """
 import sys
 import tempfile
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -186,7 +187,8 @@ def _add_usage(usage: dict, video_tokens: int = 0):
     u["prompt_tokens"]     += usage.get("prompt_tokens", 0)
     u["completion_tokens"] += usage.get("completion_tokens", 0)
     u["total_tokens"]      += usage.get("total_tokens", 0)
-    u["calls"]             += 1
+    if usage:
+        u["calls"]         += 1
     u["video_tokens"]      += video_tokens
 
 
@@ -205,6 +207,10 @@ def _cost() -> float:
         + u["video_tokens"]      / 1000 * config.COST_PER_1K_VIDEO_TOKENS
         + u["images_generated"]  * config.COST_PER_IMAGE
     )
+
+
+def _html(value) -> str:
+    return escape(str(value or ""))
 
 
 _SEV_ICON  = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}
@@ -426,11 +432,11 @@ if st.session_state.current_step >= 1:
                     st.markdown(
                         f'<div class="issue-card {_SEV_CLASS.get(sev, "issue-low")}">'
                         f'<div class="issue-meta">'
-                        f'{_SEV_ICON.get(sev, "⚪")} {issue.get("policy_type", "")}'
-                        f'<span class="issue-ts">· {issue.get("timestamp", "")}</span>'
+                        f'{_SEV_ICON.get(sev, "⚪")} {_html(issue.get("policy_type", ""))}'
+                        f'<span class="issue-ts">· {_html(issue.get("timestamp", ""))}</span>'
                         f'</div>'
-                        f'<div class="issue-orig">"{issue.get("original_content", "")}"</div>'
-                        f'<div class="issue-fix">→ {issue.get("suggested_fix", "")}</div>'
+                        f'<div class="issue-orig">"{_html(issue.get("original_content", ""))}"</div>'
+                        f'<div class="issue-fix">→ {_html(issue.get("suggested_fix", ""))}</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
@@ -604,14 +610,16 @@ if st.session_state.current_step >= 4:
             # Reference images
             st.markdown("**Reference Images — Seedream 5.0 Lite**")
 
-            tab_char, tab_product = st.tabs(["👤 Character", "📦 Add Product Info"])
+            tabs = ["📦 Product"]
+            if st.session_state.character_description or reference.get("character", ""):
+                tabs.insert(0, "👤 Character")
+            tab_objects = st.tabs(tabs)
+            tab_by_name = dict(zip(tabs, tab_objects))
 
             # ── Character tab ─────────────────────────────────────────────────
-            with tab_char:
-                _has_char = bool(st.session_state.character_description)
-                if not _has_char and not reference.get("character", ""):
-                    st.info("No character detected in this video — character reference is not needed.")
-                else:
+            if "👤 Character" in tab_by_name:
+                tab_char = tab_by_name["👤 Character"]
+                with tab_char:
                     _ref_key = "ref_prompt_character"
                     if _ref_key not in st.session_state:
                         st.session_state[_ref_key] = reference.get("character", "")
@@ -638,10 +646,12 @@ if st.session_state.current_step >= 4:
                         st.image(char_gen["image_url"], caption="Character reference · $0.04")
                     elif char_gen.get("status") == "failed":
                         st.error(f"Failed: {char_gen.get('error', 'unknown')}")
+            else:
+                st.session_state.gen_images.pop("character", None)
 
             # ── Product Info tab ──────────────────────────────────────────────
-            with tab_product:
-                st.markdown("Upload 1–3 product photos (different angles). Seedance will replicate the exact appearance.")
+            with tab_by_name["📦 Product"]:
+                st.markdown("Upload 1-3 product photos (different angles). Seedance will replicate the exact appearance.")
                 import base64 as _b64
                 uploads = st.file_uploader(
                     "Upload product photos",
@@ -702,7 +712,8 @@ if st.session_state.current_step >= 4:
                     res = generate_shot_video(prompt, char_img, product_imgs, api_key=_API_KEY)
                 st.session_state.gen_videos["main"] = res
                 _add_usage({}, video_tokens=res.get("video_tokens", 0))
-                st.session_state.api_usage["videos_generated"] += 1
+                if res.get("status") == "succeeded":
+                    st.session_state.api_usage["videos_generated"] += 1
                 st.rerun()
 
             if is_done and vid_result.get("video_url"):
@@ -761,9 +772,9 @@ if st.session_state.current_step >= 4:
                         for issue in inst_issues:
                             st.markdown(
                                 f'<div class="issue-card issue-med">'
-                                f'<div class="issue-meta">{issue.get("element", "")}</div>'
-                                f'<div class="issue-orig">Expected: {issue.get("expected", "")}</div>'
-                                f'<div class="issue-fix">Actual: {issue.get("actual", "")}</div>'
+                                f'<div class="issue-meta">{_html(issue.get("element", ""))}</div>'
+                                f'<div class="issue-orig">Expected: {_html(issue.get("expected", ""))}</div>'
+                                f'<div class="issue-fix">Actual: {_html(issue.get("actual", ""))}</div>'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
@@ -776,8 +787,8 @@ if st.session_state.current_step >= 4:
                             st.markdown(
                                 f'<div class="issue-card {_SEV_CLASS.get(sev, "issue-low")}">'
                                 f'<div class="issue-meta">'
-                                f'{_SEV_ICON.get(sev, "⚪")} {issue.get("description", "")}'
-                                f'<span class="issue-ts">· {issue.get("timestamp", "")}</span>'
+                                f'{_SEV_ICON.get(sev, "⚪")} {_html(issue.get("description", ""))}'
+                                f'<span class="issue-ts">· {_html(issue.get("timestamp", ""))}</span>'
                                 f'</div>'
                                 f'</div>',
                                 unsafe_allow_html=True,

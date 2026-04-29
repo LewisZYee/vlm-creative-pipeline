@@ -4,10 +4,10 @@ Parses scores/status directly from the analyzer markdown (so they are always
 consistent), then calls the LLM only to extract structured issues and
 recommendations.
 """
-import json
 import re
 
 import config
+from pipeline.common import ark_client, message_content, parse_json_response, usage_summary
 
 # ── Parse scores directly from analyzer output ────────────────────────────────
 def _parse_scores(text: str) -> dict:
@@ -108,13 +108,6 @@ Rules:
 - Return ONLY the JSON object. No markdown fences, no explanation.
 """
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def _parse_json(text: str) -> dict:
-    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text.strip())
-    return json.loads(text)
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 def generate_critique(analysis_text: str, api_key: str = "") -> dict:
     """
@@ -136,9 +129,7 @@ def generate_critique(analysis_text: str, api_key: str = "") -> dict:
     viral_score, viral_explanation = _parse_viral(analysis_text)
 
     # ── LLM call for issues + recommendations only ────────────────────────────
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
     response = client.chat.completions.create(
         model=config.ANALYSIS_MODEL,
         messages=[
@@ -155,13 +146,8 @@ def generate_critique(analysis_text: str, api_key: str = "") -> dict:
         thinking={"type": "disabled"},
     )
 
-    dump = response.model_dump(exclude_none=True)
-    raw = ""
-    for ch in dump.get("choices", []):
-        raw += (ch.get("message") or {}).get("content") or ""
-
-    llm_data = _parse_json(raw)
-    usage = dump.get("usage", {})
+    raw, usage = message_content(response)
+    llm_data = parse_json_response(raw)
 
     critique = {
         "compliance_status": status,
@@ -176,11 +162,6 @@ def generate_critique(analysis_text: str, api_key: str = "") -> dict:
 
     return {
         "critique": critique,
-        "usage": {
-            "prompt_tokens":    usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens": 0,  # thinking=disabled in critic
-            "total_tokens":     usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage, reasoning=False),
         "usage_raw": usage,
     }

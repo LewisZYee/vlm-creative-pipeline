@@ -5,10 +5,8 @@ Takes the revised 15-second storyboard and produces:
   - Standalone location reference prompt (Seedream)
   - Standalone character reference prompt (Seedream) — only when a character exists
 """
-import json
-import re
-
 import config
+from pipeline.common import ark_client, message_content, parse_json_response, usage_summary
 
 _PROMPT_HEADER = """You are a professional film director and AI video prompt engineer specialising in Seedance / Seedream generation for short-form social ads.
 
@@ -180,9 +178,7 @@ def generate_shot_prompts_short(
         has_character:      False if the video has no human character — omits character
                             reference instruction and character brief from output.
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     character_description = sections.get("character_description", "")
     character             = sections.get("character", "")
@@ -224,25 +220,12 @@ def generate_shot_prompts_short(
         thinking={"type": "enabled"},
     )
 
-    dump = response.model_dump(exclude_none=True)
-    raw  = ""
-    for ch in dump.get("choices", []):
-        raw += (ch.get("message") or {}).get("content") or ""
-
-    clean = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    clean = re.sub(r"\s*```$", "", clean.strip())
-    data  = json.loads(clean)
-
-    usage = dump.get("usage", {})
+    raw, usage = message_content(response)
+    data = parse_json_response(raw)
     return {
         "video_prompt": data.get("video_prompt", ""),
         "reference":    data.get("reference_prompts", {}),
         "raw":          raw,
-        "usage": {
-            "prompt_tokens":     usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens":  usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":      usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

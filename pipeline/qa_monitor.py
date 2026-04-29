@@ -4,10 +4,8 @@ Feeds the Seedance-generated video back into Seed 2.0 Pro VLM to evaluate:
   1. Instruction following — did the video match the production prompt?
   2. Compliance — does the generated output contain any violations?
 """
-import json
-import re
-
 import config
+from pipeline.common import ark_client, message_content, parse_json_response, usage_summary
 
 QA_SYSTEM_PROMPT = """You are a QA engineer reviewing AI-generated video ads.
 
@@ -83,9 +81,7 @@ def qa_generated_video(video_url: str, original_prompt: str, api_key: str = "") 
             "usage": dict,
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     response = client.chat.completions.create(
         model=config.ANALYSIS_MODEL,
@@ -112,20 +108,14 @@ def qa_generated_video(video_url: str, original_prompt: str, api_key: str = "") 
         thinking={"type": "enabled"},
     )
 
-    dump = response.model_dump(exclude_none=True)
-    raw = ""
-    for ch in dump.get("choices", []):
-        raw += (ch.get("message") or {}).get("content") or ""
-
-    clean = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    clean = re.sub(r"\s*```$", "", clean.strip())
+    raw, usage = message_content(response)
 
     # Pass/fail thresholds — calculated here, not by the LLM
     # instruction >= 6  (AI generation has inherent variance, some deviation is expected)
     # compliance  >= 7  (compliance is more critical)
     # no HIGH severity compliance issues
     try:
-        qa_data = json.loads(clean)
+        qa_data = parse_json_response(raw)
     except Exception:
         qa_data = {
             "instruction_following_score": 0,
@@ -140,15 +130,9 @@ def qa_generated_video(video_url: str, original_prompt: str, api_key: str = "") 
     _highs = [i for i in qa_data.get("compliance_issues", []) if i.get("severity") == "HIGH"]
     qa_data["overall_pass"] = bool(_if >= 6 and _co >= 7 and not _highs)
 
-    usage = dump.get("usage", {})
     return {
         "qa": qa_data,
         "raw": raw,
-        "usage": {
-            "prompt_tokens":     usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens":  usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":      usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

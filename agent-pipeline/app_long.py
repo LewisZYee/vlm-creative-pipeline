@@ -6,6 +6,7 @@ Author: Lewis Zhao, BytePlus EUI Solution Architect
 """
 import sys
 import tempfile
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -151,6 +152,32 @@ for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# ── API Key Gate ───────────────────────────────────────────────────────────────
+if "ark_api_key" not in st.session_state:
+    st.session_state.ark_api_key = ""
+
+if not st.session_state.ark_api_key:
+    st.markdown("## Enter your BytePlus API Key")
+    st.markdown(
+        "Your key is used only for this browser session and is never stored or logged. "
+        "Each participant uses their own key and pays their own usage costs."
+    )
+    with st.form("api_key_form"):
+        key_input = st.text_input(
+            "API Key",
+            type="password",
+            placeholder="Paste your BytePlus Ark API key here...",
+        )
+        if st.form_submit_button("Start ->", type="primary"):
+            if key_input.strip():
+                st.session_state.ark_api_key = key_input.strip()
+                st.rerun()
+            else:
+                st.error("Please enter a valid API key.")
+    st.stop()
+
+_API_KEY = st.session_state.ark_api_key
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def _add_usage(usage: dict, video_tokens: int = 0):
@@ -158,7 +185,8 @@ def _add_usage(usage: dict, video_tokens: int = 0):
     u["prompt_tokens"]     += usage.get("prompt_tokens", 0)
     u["completion_tokens"] += usage.get("completion_tokens", 0)
     u["total_tokens"]      += usage.get("total_tokens", 0)
-    u["calls"]             += 1
+    if usage:
+        u["calls"]         += 1
     u["video_tokens"]      += video_tokens
 
 
@@ -177,6 +205,10 @@ def _cost() -> float:
         + u["video_tokens"]      / 1000 * config.COST_PER_1K_VIDEO_TOKENS
         + u["images_generated"]  * config.COST_PER_IMAGE
     )
+
+
+def _html(value) -> str:
+    return escape(str(value or ""))
 
 
 _SEV_ICON  = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}
@@ -305,13 +337,14 @@ if st.session_state.current_step >= 1:
                 a_result = analyze_video(
                     st.session_state.video_path,
                     performance=st.session_state.performance,
+                    api_key=_API_KEY,
                 )
                 _add_usage(a_result["usage"])
                 st.session_state.analysis_result = a_result
                 st.session_state.character_description = a_result.get("character_description", "")
 
                 st.write("🔍 Extracting compliance issues and scores…")
-                cr = generate_critique(a_result["content"])
+                cr = generate_critique(a_result["content"], api_key=_API_KEY)
                 _add_usage(cr["usage"])
                 st.session_state.critique_result = cr
 
@@ -388,11 +421,11 @@ if st.session_state.current_step >= 1:
                     st.markdown(
                         f'<div class="issue-card {_SEV_CLASS.get(sev, "issue-low")}">'
                         f'<div class="issue-meta">'
-                        f'{_SEV_ICON.get(sev, "⚪")} {issue.get("policy_type", "")}'
-                        f'<span class="issue-ts">· {issue.get("timestamp", "")}</span>'
+                        f'{_SEV_ICON.get(sev, "⚪")} {_html(issue.get("policy_type", ""))}'
+                        f'<span class="issue-ts">· {_html(issue.get("timestamp", ""))}</span>'
                         f'</div>'
-                        f'<div class="issue-orig">"{issue.get("original_content", "")}"</div>'
-                        f'<div class="issue-fix">→ {issue.get("suggested_fix", "")}</div>'
+                        f'<div class="issue-orig">"{_html(issue.get("original_content", ""))}"</div>'
+                        f'<div class="issue-fix">→ {_html(issue.get("suggested_fix", ""))}</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
@@ -463,7 +496,7 @@ if st.session_state.current_step >= 3:
         with st.chat_message("assistant", avatar="🎬"):
             with st.status("Generating improved storyboard…", expanded=True) as status:
                 st.write("✍️ Restructuring Hook → Demo → CTA flow…")
-                sb_result = generate_storyboard_short(st.session_state.analysis_result["content"])
+                sb_result = generate_storyboard_short(st.session_state.analysis_result["content"], api_key=_API_KEY)
                 _add_usage(sb_result["usage"])
                 st.session_state.storyboard_result = sb_result
                 status.update(label="Storyboard ready ✓", state="complete")
@@ -540,7 +573,7 @@ if st.session_state.current_step >= 4:
                 st.write("🎯 Translating storyboard into Seedance-ready prompt…")
                 sr   = st.session_state.storyboard_result
                 secs = {**sr["sections"], "character_description": st.session_state.character_description}
-                sh_result = generate_shot_prompts_short(sr["content"], secs)
+                sh_result = generate_shot_prompts_short(sr["content"], secs, api_key=_API_KEY)
                 _add_usage(sh_result["usage"])
                 st.session_state.shot_result = sh_result
                 status.update(label="Prompts ready ✓", state="complete")
@@ -585,7 +618,7 @@ if st.session_state.current_step >= 4:
                     disabled=not char_prompt,
                 ):
                     with st.spinner("Generating character image with Seedream 5.0 Lite…"):
-                        res = generate_image(char_prompt)
+                        res = generate_image(char_prompt, api_key=_API_KEY)
                     st.session_state.gen_images["character"] = res
                     if res.get("status") == "succeeded":
                         st.session_state.api_usage["images_generated"] += 1
@@ -672,10 +705,18 @@ if st.session_state.current_step >= 4:
                     disabled=not prompt,
                 ):
                     with st.spinner(f"Generating Shot {sid} — {label}… (1–2 min)"):
-                        res = generate_shot_video(prompt, char_img, product_imgs, prev_video_url=prev_vid, duration=10)
+                        res = generate_shot_video(
+                            prompt,
+                            char_img,
+                            product_imgs,
+                            prev_video_url=prev_vid,
+                            duration=10,
+                            api_key=_API_KEY,
+                        )
                     st.session_state.gen_videos[_vr] = res
                     _add_usage({}, video_tokens=res.get("video_tokens", 0))
-                    st.session_state.api_usage["videos_generated"] += 1
+                    if res.get("status") == "succeeded":
+                        st.session_state.api_usage["videos_generated"] += 1
                     st.rerun()
 
                 if is_done and vid_result.get("video_url"):

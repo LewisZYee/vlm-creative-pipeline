@@ -6,6 +6,7 @@ storyboard. Fixes all issues, preserves what works, compressed to exactly 15 sec
 import re
 
 import config
+from pipeline.common import ark_client, message_content, usage_summary
 
 
 STORYBOARD_SHORT_PROMPT = """You are a professional video director, storyboard artist, performance advertising creative strategist, and AI video generation prompt engineer. You specialise in short-form social ads for TikTok, Instagram Reels, and YouTube Shorts.
@@ -154,9 +155,7 @@ def generate_storyboard_short(analysis_text: str, api_key: str = "") -> dict:
             "usage":    dict,
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     combined = (
         STORYBOARD_SHORT_PROMPT
@@ -170,22 +169,12 @@ def generate_storyboard_short(analysis_text: str, api_key: str = "") -> dict:
         thinking={"type": "enabled"},
     )
 
-    dump    = response.model_dump(exclude_none=True)
-    content = ""
-    for ch in dump.get("choices", []):
-        content += (ch.get("message") or {}).get("content") or ""
-
-    usage    = dump.get("usage", {})
+    content, usage = message_content(response)
     sections = parse_sections(content)
 
     return {
         "content":  content,
         "sections": sections,
-        "usage": {
-            "prompt_tokens":     usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens":  usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":      usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

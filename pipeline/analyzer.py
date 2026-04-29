@@ -5,9 +5,9 @@ review + storyboard breakdown.
 """
 import base64
 import re
-from pathlib import Path
 
 import config
+from pipeline.common import ark_client, message_content, read_text, usage_summary
 
 
 def _fix_markdown(text: str) -> str:
@@ -63,8 +63,7 @@ _PERFORMANCE_CONTEXTS = {
 
 def _read_prompt(performance: str = "bad") -> str:
     path = config.PROMPTS_DIR / "analysisPrompt"
-    with open(path, "r", encoding="utf-8") as f:
-        template = f.read()
+    template = read_text(path)
     context = _PERFORMANCE_CONTEXTS.get(performance, _PERFORMANCE_CONTEXTS["bad"])
     return template.replace("{PERFORMANCE_CONTEXT}", context)
 
@@ -102,9 +101,7 @@ def analyze_video(video_path: str, performance: str = "bad", api_key: str = "") 
             },
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
     prompt = _read_prompt(performance)
     video_b64 = _encode_video(video_path)
 
@@ -128,22 +125,12 @@ def analyze_video(video_path: str, performance: str = "bad", api_key: str = "") 
         thinking={"type": "enabled"},
     )
 
-    dump = response.model_dump(exclude_none=True)
-    content = ""
-    for ch in dump.get("choices", []):
-        content += (ch.get("message") or {}).get("content") or ""
+    content, usage = message_content(response)
 
     analysis, char_desc = _parse_character_description(content)
-
-    usage = dump.get("usage", {})
     return {
         "content": _fix_markdown(analysis),
         "character_description": char_desc,
-        "usage": {
-            "prompt_tokens":    usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens": usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":     usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

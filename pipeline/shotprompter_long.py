@@ -6,10 +6,8 @@ Takes the revised 15-second storyboard and produces:
     character description, environment description, and a timestamped scene breakdown
   - Standalone character reference prompt (for Seedream generation)
 """
-import json
-import re
-
 import config
+from pipeline.common import ark_client, message_content, parse_json_response, usage_summary
 
 
 DIRECTOR_SYSTEM_PROMPT_SHORT = """You are a world-class short-form video ecommerce director and Seedance AI video prompt engineer specialising in TikTok / Reels / Shorts product ads.
@@ -99,7 +97,7 @@ OUTPUT — valid JSON only, no markdown fences, no explanation
 """
 
 
-def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict:
+def generate_shot_prompts_short(storyboard_content: str, sections: dict, api_key: str = "") -> dict:
     """
     Generate individual Seedance shot prompts (~10s each) from the revised storyboard.
     Each prompt follows the prompt_to_learn format:
@@ -120,9 +118,7 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict
             "usage":     dict,
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     character_description = sections.get("character_description", "")
     character             = sections.get("character", "")
@@ -163,25 +159,12 @@ def generate_shot_prompts_short(storyboard_content: str, sections: dict) -> dict
         thinking={"type": "enabled"},
     )
 
-    dump = response.model_dump(exclude_none=True)
-    raw  = ""
-    for ch in dump.get("choices", []):
-        raw += (ch.get("message") or {}).get("content") or ""
-
-    clean = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    clean = re.sub(r"\s*```$", "", clean.strip())
-    data  = json.loads(clean)
-
-    usage = dump.get("usage", {})
+    raw, usage = message_content(response)
+    data = parse_json_response(raw)
     return {
         "shots":     data.get("shots", []),
         "reference": data.get("reference", {}),
         "raw":       raw,
-        "usage": {
-            "prompt_tokens":     usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens":  usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0),
-            "total_tokens":      usage.get("total_tokens", 0),
-        },
+        "usage": usage_summary(usage),
         "usage_raw": usage,
     }

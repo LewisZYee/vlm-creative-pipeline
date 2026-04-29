@@ -9,18 +9,16 @@ Input per task:
 """
 import base64
 import os
-import re
-from pathlib import Path
 from typing import Optional
 
 import config
+from pipeline.common import ark_client, read_text
 
 
 # ── Video generation prompt ────────────────────────────────────────────────────
 def _read_video_gen_prompt() -> str:
     path = config.PROMPTS_DIR / "videoGenPrompt"
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    return read_text(path)
 
 
 def _encode_video(video_path: str) -> str:
@@ -143,6 +141,7 @@ def _build_prompt(base: str, label: str, scene_desc: str, character: str, style:
 def submit_video_tasks(
     scenes: list[dict],
     reference_video_path: Optional[str] = None,
+    api_key: str = "",
 ) -> list[dict]:
     """
     Submit all scene tasks to Seedance 2.0.
@@ -156,9 +155,7 @@ def submit_video_tasks(
     Returns:
         Same list with task_id and status updated to "submitted".
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     is_v2 = True  # always Seedance 2.0
 
@@ -226,14 +223,12 @@ def submit_video_tasks(
     return scenes
 
 
-def poll_video_tasks(scenes: list[dict]) -> list[dict]:
+def poll_video_tasks(scenes: list[dict], api_key: str = "") -> list[dict]:
     """
     Poll all in-flight tasks once and update their status.
     Call repeatedly (with sleep between) until all_done() returns True.
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     for scene in scenes:
         if scene["status"] in ("succeeded", "failed") or not scene.get("task_id"):
@@ -272,9 +267,7 @@ def generate_image(prompt: str, api_key: str = "") -> dict:
             "error":     str | None,
         }
     """
-    from byteplussdkarkruntime import Ark
-
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    client = ark_client(api_key)
 
     try:
         response = client.images.generate(
@@ -332,11 +325,13 @@ def generate_shot_video(
         }
     """
     import time
-    from byteplussdkarkruntime import Ark
+    client = ark_client(api_key)
 
-    client = Ark(base_url=config.ARK_BASE_URL, api_key=api_key or config.ARK_API_KEY)
+    prompt_text = prompt
+    if prev_video_url:
+        prompt_text += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow. Music must continue seamlessly from the previous shot: same track, same energy level, no restart."
 
-    content = [{"type": "text", "text": prompt}]
+    content = [{"type": "text", "text": prompt_text}]
 
     # Attach reference images.
     # char_image_url   — HTTPS URL from Seedream (Seedance requires HTTPS for video, but
@@ -348,7 +343,6 @@ def generate_shot_video(
     for url in (product_image_urls or []):
         content.append({"type": "image_url", "image_url": {"url": url}, "role": "reference_image"})
     if prev_video_url:
-        prompt += "\n\nThis shot is a natural story continuation of the previous shot — maintain visual consistency, character appearance, and scene flow. Music must continue seamlessly from the previous shot: same track, same energy level, no restart."
         content.append({"type": "video_url", "video_url": {"url": prev_video_url}, "role": "reference_video"})
 
     try:
